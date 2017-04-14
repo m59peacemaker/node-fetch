@@ -53,6 +53,7 @@
     "resumer": "0.0.0",
     "rollup": "^0.41.4",
     "rollup-plugin-babel": "^2.6.1",
+    "tape": "^4.6.3",
     "whatwg-url": "^4.0.0"
   },
   "dependencies": {
