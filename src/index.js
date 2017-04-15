@@ -14,7 +14,8 @@ import {PassThrough} from 'stream';
 import Body, { writeToStream } from './body';
 import Response from './response';
 import Headers from './headers';
-import Request, { getNodeRequestOptions } from './request';
+import Request from './request';
+import getNodeRequestOptions from './lib/get-node-request-options'
 import FetchError from './fetch-error';
 
 /**
@@ -25,11 +26,6 @@ import FetchError from './fetch-error';
  * @return  Promise
  */
 export default function fetch(url, opts) {
-
-  // allow custom promise
-  if (!fetch.Promise) {
-    throw new Error('native promise missing, set fetch.Promise to your favorite alternative');
-  }
 
   Body.Promise = fetch.Promise;
 

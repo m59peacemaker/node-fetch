@@ -75,10 +75,7 @@ const Headers = function (init) {
 
   const get = name => {
     const list = map[sanitizeName(name)]
-    if (!list) {
-      return null
-    }
-    return list.join(',')
+    return list ? list.join(',') : null
   }
 
   const getMapKeys = () => Object.keys(map).sort()

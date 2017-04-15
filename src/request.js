@@ -1,94 +1,135 @@
+import typeofObject from 'typeof-object'
+import isNil from 'is-nil'
+import alwaysPick from 'just-pick'
+import pick from 'object.pick'
 
-/**
- * request.js
- *
- * Request class contains server only options
- */
+import { format as formatUrl, parse as parseUrl } from 'url'
+import Headers from './headers.js'
+import Body, { extractContentType } from './body'
+import getContentType from './body/get-content-type'
+import Stream, {PassThrough} from 'stream'
+import consumeBody from './body/consume'
+import Blob, { BUFFER } from './blob.js'
 
-import { format as format_url, parse as parse_url } from 'url';
-import Headers from './headers.js';
-import Body, { clone, extractContentType, getTotalBytes } from './body';
+const DISTURBED = Symbol('disturbed')
 
-const PARSED_URL = Symbol('url');
+const props = [
+  'body',
+  'bodyUsed',
+  'method',
+  'redirect',
+  'headers',
 
-/**
- * Request class
- *
- * @param   Mixed   input  Url or Request instance
- * @param   Object  init   Custom options
- * @return  Void
- */
+  'size',
+  'timeout',
+
+  'agent',
+  'compress',
+  'counter',
+  'follow'
+]
+
+const defaultInit = {
+  body: null,
+  headers: {},
+  method: 'GET',
+  redirect: 'follow',
+
+  size: 0,
+  timeout: 0,
+
+  compress: true,
+  counter: 0,
+  follow: 20
+}
+
+const clone = ({ body, bodyUsed }) => {
+  if (bodyUsed) {
+    throw new Error('cannot clone body after it is used')
+  }
+
+  // TODO: we can't clone the form-data object without having it as a dependency
+  if (body instanceof Stream && typeofObject(body) !== 'FormData') {
+    const p = new PassThrough()
+    body.pipe(p)
+    return p
+  }
+
+  return body
+}
+
+const normalizeUrl = input => isNil(input.href) ? String(input) : input.href
+
+const normalizeBody = body => {
+  if (isNil(body)) {
+    return null
+  } else if (
+    typeof body === 'string' ||
+    typeofObject(body) === 'Blob' ||
+    Buffer.isBuffer(body) ||
+    body instanceof Stream
+  ) {
+    return body
+  }
+  return String(body)
+}
+
 export default class Request {
   constructor(input, init = {}) {
-    let parsedURL;
 
-    // normalize input
-    if (!(input instanceof Request)) {
-      if (input && input.href) {
-        // in order to support Node.js' Url objects; though WHATWG's URL objects
-        // will fall into this branch also (since their `toString()` will return
-        // `href` property anyway)
-        parsedURL = parse_url(input.href);
-      } else {
-        // coerce input to a string before attempting to parse
-        parsedURL = parse_url(`${input}`);
+    // TODO: write tests for type check
+    // TODO: TypeError: Failed to construct 'Request':
+    if (arguments.length < 1 ) {
+      throw new TypeError('1 argument required, but only 0 present.')
+    }
+
+    const params = typeofObject(input) === 'Request' ?
+      { url: input.url, init: alwaysPick(input, props) } :
+      { url: normalizeUrl(input) }
+
+    const parsedUrl = parseUrl(params.url)
+
+    const request = Object.assign(
+      {},
+      defaultInit,
+      params.init,
+      init
+    )
+
+    request.method = request.method.toUpperCase()
+    request.headers = new Headers(request.headers)
+
+    if (!isNil(request.body)) {
+      if (request.method === 'GET' || request.method === 'HEAD') {
+        throw new TypeError('Request with GET/HEAD method cannot have body')
       }
-      input = {};
-    } else {
-      parsedURL = parse_url(input.url);
-    }
 
-    let method = init.method || input.method || 'GET';
+      request.body = normalizeBody(clone(request))
 
-    if ((init.body != null || input instanceof Request && input.body !== null) &&
-      (method === 'GET' || method === 'HEAD')) {
-      throw new TypeError('Request with GET/HEAD method cannot have body');
-    }
-
-    let inputBody = init.body != null ?
-      init.body :
-      input instanceof Request && input.body !== null ?
-        clone(input) :
-        null;
-
-    Body.call(this, inputBody, {
-      timeout: init.timeout || input.timeout || 0,
-      size: init.size || input.size || 0
-    });
-
-    // fetch spec options
-    this.method = method.toUpperCase();
-    this.redirect = init.redirect || input.redirect || 'follow';
-    this.headers = new Headers(init.headers || input.headers || {});
-
-    if (init.body != null) {
-      const contentType = extractContentType(this);
-      if (contentType !== null && !this.headers.has('Content-Type')) {
-        this.headers.append('Content-Type', contentType);
+      const contentType = getContentType(request.body)
+      if (!isNil(contentType) && !request.headers.has('Content-Type')) {
+        request.headers.append('Content-Type', contentType)
       }
     }
 
-    // server only options
-    this.follow = init.follow !== undefined ?
-      init.follow : input.follow !== undefined ?
-      input.follow : 20;
-    this.compress = init.compress !== undefined ?
-      init.compress : input.compress !== undefined ?
-      input.compress : true;
-    this.counter = init.counter || input.counter || 0;
-    this.agent = init.agent || input.agent;
+    // TODO: maybe don't need to delete this once OOP is done away with
+    delete request.bodyUsed
+    Object.assign(this, request)
 
-    this[PARSED_URL] = parsedURL;
+    // test passed with this removed...
+    this[DISTURBED] = false
+
+    this._url = parsedUrl
+
     Object.defineProperty(this, Symbol.toStringTag, {
       value: 'Request',
       writable: false,
       enumerable: false,
-      configurable: true
-    });
+    })
   }
 
   get url() {
-    return format_url(this[PARSED_URL]);
+    return formatUrl(this._url)
   }
 
   /**
@@ -97,71 +138,50 @@ export default class Request {
    * @return  Request
    */
   clone() {
-    return new Request(this);
+    return new Request(this)
+  }
+
+  get bodyUsed() {
+    return this[DISTURBED]
+  }
+
+  arrayBuffer() {
+    return consumeBody(this.body, this).then(buffer => buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength))
+  }
+
+  blob() {
+    let ct = this.headers && this.headers.get('content-type') || ''
+    return consumeBody(this.body, this).then(buffer => Object.assign(
+      // Prevent copying
+      new Blob([], {
+        type: ct.toLowerCase()
+      }),
+      {
+        [BUFFER]: buffer
+      }
+    ))
+  }
+
+  json() {
+    return consumeBody(this.body, this).then(buffer => JSON.parse(buffer.toString()))
+  }
+
+  text() {
+    return consumeBody(this.body, this).then(buffer => buffer.toString())
+  }
+
+  buffer() {
+    return consumeBody(this.body, this)
+  }
+
+  textConverted() {
+    return consumeBody(this.body, this).then(buffer => convertBody(buffer, this.headers))
   }
 }
-
-Body.mixIn(Request.prototype);
 
 Object.defineProperty(Request.prototype, Symbol.toStringTag, {
   value: 'RequestPrototype',
   writable: false,
   enumerable: false,
   configurable: true
-});
-
-export function getNodeRequestOptions(request) {
-  const parsedURL = request[PARSED_URL];
-  const headers = new Headers(request.headers);
-
-  // fetch step 3
-  if (!headers.has('Accept')) {
-    headers.set('Accept', '*/*');
-  }
-
-  // Basic fetch
-  if (!parsedURL.protocol || !parsedURL.hostname) {
-    throw new TypeError('Only absolute URLs are supported');
-  }
-
-  if (!/^https?:$/.test(parsedURL.protocol)) {
-    throw new TypeError('Only HTTP(S) protocols are supported');
-  }
-
-  // HTTP-network-or-cache fetch steps 5-9
-  let contentLengthValue = null;
-  if (request.body == null && /^(POST|PUT)$/i.test(request.method)) {
-    contentLengthValue = '0';
-  }
-  if (request.body != null) {
-    const totalBytes = getTotalBytes(request);
-    if (typeof totalBytes === 'number') {
-      contentLengthValue = String(totalBytes);
-    }
-  }
-  if (contentLengthValue) {
-    headers.set('Content-Length', contentLengthValue);
-  }
-
-  // HTTP-network-or-cache fetch step 12
-  if (!headers.has('User-Agent')) {
-    headers.set('User-Agent', 'node-fetch/1.0 (+https://github.com/bitinn/node-fetch)');
-  }
-
-  // HTTP-network-or-cache fetch step 16
-  if (request.compress) {
-    headers.set('Accept-Encoding', 'gzip,deflate');
-  }
-  if (!headers.has('Connection') && !request.agent) {
-    headers.set('Connection', 'close');
-  }
-
-  // HTTP-network fetch step 4
-  // chunked encoding is handled by Node.js
-
-  return Object.assign({}, parsedURL, {
-    method: request.method,
-    headers: headers.raw(),
-    agent: request.agent
-  });
-}
+})

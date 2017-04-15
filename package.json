@@ -57,6 +57,10 @@
     "whatwg-url": "^4.0.0"
   },
   "dependencies": {
-    "encoding": "^0.1.11"
+    "encoding": "^0.1.11",
+    "is-nil": "^1.0.1",
+    "just-pick": "^1.0.3",
+    "object.pick": "^1.2.0",
+    "typeof-object": "^1.1.0"
   }
 }
