@@ -11,14 +11,15 @@ import Stream, {PassThrough} from 'stream'
 import consumeBody from './body/consume'
 import Blob, { BUFFER } from './blob.js'
 
-const DISTURBED = Symbol('disturbed')
-
+// TODO:
+// initProps?
+// requestProps?
 const props = [
   'body',
   'bodyUsed',
+  'headers',
   'method',
   'redirect',
-  'headers',
 
   'size',
   'timeout',
@@ -31,6 +32,7 @@ const props = [
 
 const defaultInit = {
   body: null,
+  bodyUsed: false,
   headers: {},
   method: 'GET',
   redirect: 'follow',
@@ -44,11 +46,13 @@ const defaultInit = {
 }
 
 const clone = ({ body, bodyUsed }) => {
+  // TODO: perhaps this check belongs in the caller
   if (bodyUsed) {
     throw new Error('cannot clone body after it is used')
   }
 
-  // TODO: we can't clone the form-data object without having it as a dependency
+  // TODO: find a way to clone FormData
+
   if (body instanceof Stream && typeofObject(body) !== 'FormData') {
     const p = new PassThrough()
     body.pipe(p)
@@ -74,114 +78,109 @@ const normalizeBody = body => {
   return String(body)
 }
 
-export default class Request {
-  constructor(input, init = {}) {
+const Request = function (input, init) {
 
-    // TODO: write tests for type check
-    // TODO: TypeError: Failed to construct 'Request':
-    if (arguments.length < 1 ) {
-      throw new TypeError('1 argument required, but only 0 present.')
+  // TODO: write tests for type check
+  // TODO: TypeError: Failed to construct 'Request':
+  if (arguments.length < 1 ) {
+    throw new TypeError('1 argument required, but only 0 present.')
+  }
+
+  const params = typeofObject(input) === 'Request' ?
+    { url: input.url, init: alwaysPick(input, props) } :
+    { url: normalizeUrl(input) }
+
+  const parsedUrl = parseUrl(params.url)
+
+  // TODO: write instanceof Request test
+  const request = Object.assign(
+    Object.create(Request.prototype),
+    defaultInit,
+    params.init,
+    init
+  )
+
+  request.method = request.method.toUpperCase()
+  request.headers = new Headers(request.headers)
+
+  if (!isNil(request.body)) {
+    if (request.method === 'GET' || request.method === 'HEAD') {
+      throw new TypeError('Request with GET/HEAD method cannot have body')
     }
 
-    const params = typeofObject(input) === 'Request' ?
-      { url: input.url, init: alwaysPick(input, props) } :
-      { url: normalizeUrl(input) }
+    request.body = normalizeBody(clone(request))
 
-    const parsedUrl = parseUrl(params.url)
+    const contentType = getContentType(request.body)
+    if (!isNil(contentType) && !request.headers.has('Content-Type')) {
+      request.headers.append('Content-Type', contentType)
+    }
+  }
 
-    const request = Object.assign(
-      {},
-      defaultInit,
-      params.init,
-      init
+  // TODO: test pass with this removed...
+  // request[DISTURBED] = false
+  // there seems to be no tests to for this body disturbed stuff
+
+  request._url = parsedUrl
+
+  const url = formatUrl(request._url)
+  request.url = url
+
+  const _clone = () => Request(request)
+
+  const arrayBuffer = () => consumeBody(request.body, request)
+    .then(buffer => buffer.buffer.slice(
+      buffer.byteOffset,
+      buffer.byteOffset + buffer.byteLength)
     )
 
-    request.method = request.method.toUpperCase()
-    request.headers = new Headers(request.headers)
+  const blob = () => {
+    const contentType = request.headers && request.headers.get('content-type') || ''
+    return consumeBody(request.body, request)
+      .then(buffer => Object.assign(
+        // Prevent copying
+        new Blob([], { type: contentType }),
+        { [BUFFER]: buffer }
+      ))
+  }
 
-    if (!isNil(request.body)) {
-      if (request.method === 'GET' || request.method === 'HEAD') {
-        throw new TypeError('Request with GET/HEAD method cannot have body')
-      }
+  const json = () => consumeBody(request.body, request)
+    .then(buffer => JSON.parse(buffer.toString()))
 
-      request.body = normalizeBody(clone(request))
+  const text = () => consumeBody(request.body, request)
+    .then(buffer => buffer.toString())
 
-      const contentType = getContentType(request.body)
-      if (!isNil(contentType) && !request.headers.has('Content-Type')) {
-        request.headers.append('Content-Type', contentType)
-      }
-    }
+  const buffer = () => consumeBody(request.body, request)
 
-    // TODO: maybe don't need to delete this once OOP is done away with
-    delete request.bodyUsed
-    Object.assign(this, request)
+  const textConverted = () => consumeBody(request.body, request)
+    .then(buffer => convertBody(buffer, request.headers))
 
-    // test passed with this removed...
-    this[DISTURBED] = false
+  const methods = {
+    clone: _clone,
+    arrayBuffer,
+    blob,
+    json,
+    text,
+    buffer,
+    textConverted
+  }
 
-    this._url = parsedUrl
+  Object.assign(request, methods)
 
-    Object.defineProperty(this, Symbol.toStringTag, {
-      value: 'Request',
-      writable: false,
-      enumerable: false,
+  // TODO: figure out / test immutable request
+
+  /*props.forEach(key => {
+    Object.defineProperty(request, key, {
+      writable: false
     })
-  }
+  })*/
 
-  get url() {
-    return formatUrl(this._url)
-  }
+  Object.defineProperty(request, Symbol.toStringTag, {
+    value: 'Request',
+    writable: false,
+    enumerable: false,
+  })
 
-  /**
-   * Clone this request
-   *
-   * @return  Request
-   */
-  clone() {
-    return new Request(this)
-  }
-
-  get bodyUsed() {
-    return this[DISTURBED]
-  }
-
-  arrayBuffer() {
-    return consumeBody(this.body, this).then(buffer => buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength))
-  }
-
-  blob() {
-    let ct = this.headers && this.headers.get('content-type') || ''
-    return consumeBody(this.body, this).then(buffer => Object.assign(
-      // Prevent copying
-      new Blob([], {
-        type: ct.toLowerCase()
-      }),
-      {
-        [BUFFER]: buffer
-      }
-    ))
-  }
-
-  json() {
-    return consumeBody(this.body, this).then(buffer => JSON.parse(buffer.toString()))
-  }
-
-  text() {
-    return consumeBody(this.body, this).then(buffer => buffer.toString())
-  }
-
-  buffer() {
-    return consumeBody(this.body, this)
-  }
-
-  textConverted() {
-    return consumeBody(this.body, this).then(buffer => convertBody(buffer, this.headers))
-  }
+  return request
 }
 
-Object.defineProperty(Request.prototype, Symbol.toStringTag, {
-  value: 'RequestPrototype',
-  writable: false,
-  enumerable: false,
-  configurable: true
-})
+export default Request
