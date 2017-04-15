@@ -1,25 +1,25 @@
+import { format as formatUrl, parse as parseUrl } from 'url'
+import Stream from 'stream'
+
 import typeofObject from 'typeof-object'
 import isNil from 'is-nil'
-import alwaysPick from 'just-pick'
-import pick from 'object.pick'
+import pick from 'just-pick'
 
-import { format as formatUrl, parse as parseUrl } from 'url'
 import Headers from './headers.js'
-import Body, { extractContentType } from './body'
-import getContentType from './body/get-content-type'
-import Stream, {PassThrough} from 'stream'
-import consumeBody from './body/consume'
 import Blob, { BUFFER } from './blob.js'
+import getContentType from './body/get-content-type'
+import consumeBody from './body/consume'
+import cloneBody from './body/clone'
+import setTypeofObject from './lib/set-typeof-object'
+import tryCatch from 'try_catch'
 
-// TODO:
-// initProps?
-// requestProps?
-const props = [
+const requestProps = [
   'body',
   'bodyUsed',
   'headers',
   'method',
   'redirect',
+  'url',
 
   'size',
   'timeout',
@@ -45,23 +45,6 @@ const defaultInit = {
   follow: 20
 }
 
-const clone = ({ body, bodyUsed }) => {
-  // TODO: perhaps this check belongs in the caller
-  if (bodyUsed) {
-    throw new Error('cannot clone body after it is used')
-  }
-
-  // TODO: find a way to clone FormData
-
-  if (body instanceof Stream && typeofObject(body) !== 'FormData') {
-    const p = new PassThrough()
-    body.pipe(p)
-    return p
-  }
-
-  return body
-}
-
 const normalizeUrl = input => isNil(input.href) ? String(input) : input.href
 
 const normalizeBody = body => {
@@ -78,54 +61,46 @@ const normalizeBody = body => {
   return String(body)
 }
 
-const Request = function (input, init) {
+const makeRequestValuesObject = (input, init) => {
+  const params = typeofObject(input) === 'Request'
+    ? { url: input.url, init: pick(input, requestProps) }
+    : { url: normalizeUrl(input) }
 
-  // TODO: write tests for type check
-  // TODO: TypeError: Failed to construct 'Request':
-  if (arguments.length < 1 ) {
-    throw new TypeError('1 argument required, but only 0 present.')
-  }
-
-  const params = typeofObject(input) === 'Request' ?
-    { url: input.url, init: alwaysPick(input, props) } :
-    { url: normalizeUrl(input) }
-
-  const parsedUrl = parseUrl(params.url)
-
-  // TODO: write instanceof Request test
-  const request = Object.assign(
-    Object.create(Request.prototype),
+  const preparedInit = Object.assign(
+    {},
     defaultInit,
     params.init,
     init
   )
 
-  request.method = request.method.toUpperCase()
-  request.headers = new Headers(request.headers)
+  const requestValues = Object.assign(
+    preparedInit,
+    {
+      url: params.url,
+      _url: parseUrl(params.url), // TODO: rename to _parsedUrl and/or hide better some other way
+      method: preparedInit.method.toUpperCase(),
+      headers: new Headers(preparedInit.headers)
+    }
+  )
 
-  if (!isNil(request.body)) {
-    if (request.method === 'GET' || request.method === 'HEAD') {
+  if (!isNil(requestValues.body)) {
+    if (requestValues.method === 'GET' || requestValues.method === 'HEAD') {
       throw new TypeError('Request with GET/HEAD method cannot have body')
     }
 
-    request.body = normalizeBody(clone(request))
+    requestValues.body = normalizeBody(cloneBody(requestValues))
 
-    const contentType = getContentType(request.body)
-    if (!isNil(contentType) && !request.headers.has('Content-Type')) {
-      request.headers.append('Content-Type', contentType)
+    const contentType = getContentType(requestValues.body)
+    if (!isNil(contentType) && !requestValues.headers.has('Content-Type')) {
+      requestValues.headers.append('Content-Type', contentType)
     }
   }
 
-  // TODO: test pass with this removed...
-  // request[DISTURBED] = false
-  // there seems to be no tests to for this body disturbed stuff
+  return requestValues
+}
 
-  request._url = parsedUrl
-
-  const url = formatUrl(request._url)
-  request.url = url
-
-  const _clone = () => Request(request)
+const addRequestFunctions = (Request, request) => {
+  const clone = () => Request(request)
 
   const arrayBuffer = () => consumeBody(request.body, request)
     .then(buffer => buffer.buffer.slice(
@@ -137,7 +112,7 @@ const Request = function (input, init) {
     const contentType = request.headers && request.headers.get('content-type') || ''
     return consumeBody(request.body, request)
       .then(buffer => Object.assign(
-        // Prevent copying
+        // prevent copying
         new Blob([], { type: contentType }),
         { [BUFFER]: buffer }
       ))
@@ -154,33 +129,44 @@ const Request = function (input, init) {
   const textConverted = () => consumeBody(request.body, request)
     .then(buffer => convertBody(buffer, request.headers))
 
-  const methods = {
-    clone: _clone,
+  return Object.assign(request, {
+    clone,
     arrayBuffer,
     blob,
     json,
     text,
     buffer,
     textConverted
-  }
-
-  Object.assign(request, methods)
-
-  // TODO: figure out / test immutable request
-
-  /*props.forEach(key => {
-    Object.defineProperty(request, key, {
-      writable: false
-    })
-  })*/
-
-  Object.defineProperty(request, Symbol.toStringTag, {
-    value: 'Request',
-    writable: false,
-    enumerable: false,
   })
+}
 
-  return request
+const Request = function (input, init) {
+  // TODO: write tests for error handling messages and error types and such
+  var args = arguments
+  return tryCatch(() => {
+    if (args.length < 1 ) {
+      throw new TypeError('1 argument required, but only 0 present.')
+    }
+
+    // TODO: write instanceof Request test
+    const request = Object.assign(
+      Object.create(Request.prototype),
+      makeRequestValuesObject(input, init)
+    )
+
+    addRequestFunctions(Request, request)
+
+    // TODO: write typeofObject test
+    setTypeofObject('Request', request)
+
+    // TODO: request values ought to be immutable
+    // TODO: should throw if something tries to use body after it has been used
+
+    return request
+  }, (err) => {
+    err.message = `Failed to construct 'Request': ${err.message}`
+    throw err
+  })
 }
 
 export default Request

@@ -61,6 +61,7 @@
     "is-nil": "^1.0.1",
     "just-pick": "^1.0.3",
     "object.pick": "^1.2.0",
+    "try_catch": "^1.0.2",
     "typeof-object": "^1.1.0"
   }
 }
