@@ -5,12 +5,15 @@ import bodyMixin from './body/mixin'
 import setTypeofObject from './lib/set-typeof-object'
 import pick from 'just-pick'
 
-const responseProps = [
+const responseProperties = [
   'url',
   'status',
   'statusText',
   'headers',
-  'ok'
+  'ok',
+
+  'size',
+  'timeout'
 ]
 
 const defaultInit = {
@@ -30,7 +33,7 @@ const Response = function (body = null, init) {
       body,
       headers: new Headers(preparedInit.headers),
       ok: preparedInit.status >= 200 && preparedInit.status < 300,
-      clone: () => new Response(cloneBody(response), pick(response, responseProps))
+      clone: () => new Response(cloneBody(response), pick(response, responseProperties))
     }
   )
 

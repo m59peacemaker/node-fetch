@@ -32,7 +32,6 @@ import FetchErrorOrig from '../src/fetch-error.js';
 import HeadersOrig from '../src/headers.js';
 import RequestOrig from '../src/request.js';
 import ResponseOrig from '../src/response.js';
-import Body from '../src/body.js';
 import Blob from '../src/blob.js';
 
 const supportToString = ({
@@ -55,27 +54,8 @@ describe('node-fetch', () => {
 	it('should return a promise', function() {
 		url = 'http://example.com/';
 		const p = fetch(url);
-		expect(p).to.be.an.instanceof(fetch.Promise);
+		expect(p).to.be.an.instanceof(Promise);
 		expect(p).to.have.property('then');
-	});
-
-	it('should allow custom promise', function() {
-		url = 'http://example.com/';
-		const old = fetch.Promise;
-		fetch.Promise = then;
-		expect(fetch(url)).to.be.an.instanceof(then);
-		expect(fetch(url)).to.not.be.an.instanceof(old);
-		fetch.Promise = old;
-	});
-
-	it('should throw error when no promise implementation are found', function() {
-		url = 'http://example.com/';
-		const old = fetch.Promise;
-		fetch.Promise = undefined;
-		expect(() => {
-			fetch(url)
-		}).to.throw(Error);
-		fetch.Promise = old;
 	});
 
 	it('should expose Headers, Response and Request constructors', function() {
@@ -1797,15 +1777,6 @@ describe('node-fetch', () => {
 			expect(results[0]).to.equal('a=1');
 			expect(results[1]).to.equal('a=1');
 		});
-	});
-
-	it('should support arrayBuffer(), blob(), text(), json() and buffer() method in Body constructor', function() {
-		const body = new Body('a=1');
-		expect(body).to.have.property('arrayBuffer');
-		expect(body).to.have.property('blob');
-		expect(body).to.have.property('text');
-		expect(body).to.have.property('json');
-		expect(body).to.have.property('buffer');
 	});
 
 	it('should create custom FetchError', function funcName() {
