@@ -1,8 +1,15 @@
 import Stream, { PassThrough } from 'stream'
 import typeofObject from 'typeof-object'
 
-const clone = ({ body, bodyUsed }) => {
-  // TODO: perhaps this check belongs in the caller
+const cloneStream = stream => {
+  const clone = new PassThrough()
+  stream.pipe(clone)
+  return clone
+}
+
+const cloneBody = instance => {
+  const { body, bodyUsed } = instance
+
   if (bodyUsed) {
     throw new Error('cannot clone body after it is used')
   }
@@ -10,12 +17,11 @@ const clone = ({ body, bodyUsed }) => {
   // TODO: find a way to clone FormData
 
   if (body instanceof Stream && typeofObject(body) !== 'FormData') {
-    const p = new PassThrough()
-    body.pipe(p)
-    return p
+    instance.body = cloneStream(body)
+    return cloneStream(body)
   }
 
   return body
 }
 
-module.exports = clone
+export default cloneBody

@@ -1,71 +1,47 @@
+import { STATUS_CODES } from 'http'
+import Headers from './headers'
+import cloneBody from './body/clone'
+import bodyMixin from './body/mixin'
+import setTypeofObject from './lib/set-typeof-object'
+import pick from 'just-pick'
 
-/**
- * response.js
- *
- * Response class provides content decoding
- */
+const responseProps = [
+  'url',
+  'status',
+  'statusText',
+  'headers',
+  'ok'
+]
 
-import { STATUS_CODES } from 'http';
-import Headers from './headers';
-import Body, { clone } from './body';
-
-/**
- * Response class
- *
- * @param   Stream  body  Readable stream
- * @param   Object  opts  Response options
- * @return  Void
- */
-class Response {
-  constructor(body = null, opts = {}) {
-    Body.call(this, body, opts);
-
-    this.url = opts.url;
-    this.status = opts.status || 200;
-    this.statusText = opts.statusText || STATUS_CODES[this.status];
-
-    this.headers = new Headers(opts.headers || []);
-
-    Object.defineProperty(this, Symbol.toStringTag, {
-      value: 'Response',
-      writable: false,
-      enumerable: false,
-      configurable: true
-    });
-  }
-
-  /**
-   * Convenience property representing if the request ended normally
-   */
-  get ok() {
-    return this.status >= 200 && this.status < 300;
-  }
-
-  /**
-   * Clone this response
-   *
-   * @return  Response
-   */
-  clone() {
-
-    return new Response(clone(this), {
-      url: this.url
-      , status: this.status
-      , statusText: this.statusText
-      , headers: this.headers
-      , ok: this.ok
-    });
-
-  }
+const defaultInit = {
+  headers: [],
+  status: 200,
+  statusText: STATUS_CODES[200]
 }
 
-Body.mixIn(Response.prototype);
+const Response = function (body = null, init) {
+  const preparedInit = Object.assign({}, defaultInit, init)
 
-Object.defineProperty(Response.prototype, Symbol.toStringTag, {
-  value: 'ResponsePrototype',
-  writable: false,
-  enumerable: false,
-  configurable: true
-});
+  // TODO: instanceof test
+  const response = Object.assign(
+    Object.create(Response.prototype),
+    preparedInit,
+    {
+      body,
+      headers: new Headers(preparedInit.headers),
+      ok: preparedInit.status >= 200 && preparedInit.status < 300,
+      clone: () => new Response(cloneBody(response), pick(response, responseProps))
+    }
+  )
+
+  // TODO: typeofObject test
+  setTypeofObject('Response', response)
+
+  // TODO: immutability
+
+  bodyMixin(response)
+
+  return response
+}
 
 export default Response

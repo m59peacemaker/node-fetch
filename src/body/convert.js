@@ -1,32 +1,26 @@
-/**
- * Detect buffer encoding and convert to target encoding
- * ref: http://www.w3.org/TR/2011/WD-html5-20110113/parsing.html#determining-the-character-encoding
- *
- * @param   Buffer  buffer    Incoming buffer
- * @param   String  encoding  Target encoding
- * @return  String
- */
-function convert (buffer, headers) {
-  const ct = headers.get('content-type')
+import { convert as convertEncoding } from 'encoding'
+
+function convertBody(buffer, headers) {
+  const contentType = headers.get('content-type')
   let charset = 'utf-8'
-  let res, str
+  let res, string
 
   // header
-  if (ct) {
-    res = /charset=([^]*)/i.exec(ct)
+  if (contentType) {
+    res = /charset=([^;]*)/i.exec(contentType)
   }
 
   // no charset in content type, peek at response body for at most 1024 bytes
-  str = buffer.slice(0, 1024).toString()
+  string = buffer.slice(0, 1024).toString()
 
   // html5
-  if (!res && str) {
-    res = /<meta.+?charset=(['"])(.+?)\1/i.exec(str)
+  if (!res && string) {
+    res = /<meta.+?charset=(['"])(.+?)\1/i.exec(string)
   }
 
   // html4
-  if (!res && str) {
-    res = /<meta[\s]+?http-equiv=(['"])content-type\1[\s]+?content=(['"])(.+?)\2/i.exec(str)
+  if (!res && string) {
+    res = /<meta[\s]+?http-equiv=(['"])content-type\1[\s]+?content=(['"])(.+?)\2/i.exec(string)
 
     if (res) {
       res = /charset=(.*)/i.exec(res.pop())
@@ -34,8 +28,8 @@ function convert (buffer, headers) {
   }
 
   // xml
-  if (!res && str) {
-    res = /<\?xml.+?encoding=(['"])(.+?)\1/i.exec(str)
+  if (!res && string) {
+    res = /<\?xml.+?encoding=(['"])(.+?)\1/i.exec(string)
   }
 
   // found charset
@@ -50,11 +44,11 @@ function convert (buffer, headers) {
   }
 
   // turn raw buffers into a single utf-8 buffer
-  return convert(
+  return convertEncoding(
     buffer
     , 'UTF-8'
     , charset
   ).toString()
 }
 
-export default convert
+export default convertBody

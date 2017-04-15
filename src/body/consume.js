@@ -1,4 +1,3 @@
-const DISTURBED = Symbol('disturbed')
 import { BUFFER } from '../blob.js'
 import typeofObject from 'typeof-object'
 import FetchError from '../fetch-error.js'
@@ -9,15 +8,7 @@ import isNil from 'is-nil'
  *
  * @return  Promise
  */
-const consume = (body, request) => {
-  const { size, timeout, url } = request
-
-  // TODO: pull this out of here once OOP is gone
-  // actually, I don't think this is being tested...
-  if (request[DISTURBED]) {
-    return Promise.reject(new Error(`body used already for: ${url}`))
-  }
-  request[DISTURBED] = true
+const consume = ({ body, size, timeout, url }) => {
 
   if (isNil(body)) {
     return Promise.resolve(new Buffer(0))

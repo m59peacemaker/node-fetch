@@ -265,6 +265,8 @@ function convertBody(buffer, headers) {
   ).toString()
 }
 
+export { convertBody }
+
 /**
  * Clone body given Res/Req instance
  *
