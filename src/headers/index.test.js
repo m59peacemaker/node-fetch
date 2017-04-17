@@ -146,6 +146,14 @@ test('when init header value is an array, it is treated as multiple values inter
   })
 })
 
+test('raw arrays are preserved when passing headers instance as init', t => {
+  // see comment in fill-headers-with-init.js
+  const h = new Headers({ 'set-cookie': [ 'a=1', 'b=1' ] })
+  t.deepEqual(new Headers(h)._raw(), { 'set-cookie': [ 'a=1', 'b=1' ] })
+
+  t.end()
+})
+
 test('construct headers with other iterables', t => {
   const headers = new Headers([
     new Set(['a', '1']),
