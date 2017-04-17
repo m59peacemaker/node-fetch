@@ -1312,52 +1312,6 @@ describe('node-fetch', () => {
 		});
 	});
 
-	it('should ignore unsupported attributes while reading headers', function() {
-		const FakeHeader = function () {};
-		// prototypes are currently ignored
-		// This might change in the future: #181
-		FakeHeader.prototype.z = 'fake';
-
-		const res = new FakeHeader;
-		res.a = 'string';
-		res.b = ['1','2'];
-		res.c = '';
-		res.d = [];
-		res.e = 1;
-		res.f = [1, 2];
-		res.g = { a:1 };
-		res.h = undefined;
-		res.i = null;
-		res.j = NaN;
-		res.k = true;
-		res.l = false;
-		res.m = new Buffer('test');
-
-		const h1 = new Headers(res);
-		h1.set('n', [1, 2]);
-		h1.append('n', ['3', 4])
-
-		const h1Raw = h1._raw();
-
-		expect(h1Raw['a']).to.include('string');
-		expect(h1Raw['b']).to.include('1,2');
-		expect(h1Raw['c']).to.include('');
-		expect(h1Raw['d']).to.include('');
-		expect(h1Raw['e']).to.include('1');
-		expect(h1Raw['f']).to.include('1,2');
-		expect(h1Raw['g']).to.include('[object Object]');
-		expect(h1Raw['h']).to.include('undefined');
-		expect(h1Raw['i']).to.include('null');
-		expect(h1Raw['j']).to.include('NaN');
-		expect(h1Raw['k']).to.include('true');
-		expect(h1Raw['l']).to.include('false');
-		expect(h1Raw['m']).to.include('test');
-		expect(h1Raw['n']).to.include('1,2');
-		expect(h1Raw['n']).to.include('3,4');
-
-		expect(h1Raw['z']).to.be.undefined;
-	});
-
 	it('should wrap headers', function() {
 		const h1 = new Headers({
 			a: '1'
