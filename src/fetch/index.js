@@ -16,61 +16,75 @@ import handleRedirect from './handle-redirect'
 import shouldNotCompress from './should-not-compress'
 import compressBody from './compress-body'
 import writeUnwritable from '../lib/write-unwritable'
+import wait from 'timeout-then'
 
-const fetch = (input, init) => new Promise((resolve, reject) => {
+var promisifyOnce = function (once) {
+  return function (eventName) {
+    return new Promise(function (resolve, reject) {
+      return once(eventName, resolve)
+    })
+  }
+}
+
+const fetch = (input, init) => Promise.resolve().then(() => {
   const request = new Request(input, init)
   const nodeRequestOptions = makeNodeRequestOptions(request)
   const makeNodeRequest = (nodeRequestOptions.protocol === 'https:' ? https : http).request
+  let stopTimeout = () => {}
 
   const nodeRequest = makeNodeRequest(nodeRequestOptions)
-  let nodeRequestTimeout
+  const once = promisifyOnce(nodeRequest.once.bind(nodeRequest))
 
-  if (request.timeout) {
-    nodeRequest.once('socket', socket => {
-      nodeRequestTimeout = setTimeout(() => {
-        nodeRequest.abort()
-        return reject(new FetchError(`network timeout at: ${request.url}`, 'request-timeout'))
-      }, request.timeout)
+  const timeoutPromise = !request.timeout ? new Promise(() => {}) : once('socket')
+    .then(() => {
+      const promise = wait(request.timeout)
+      stopTimeout = () => promise.clear()
+      return promise
     })
-  }
+    .then(() => {
+      nodeRequest.abort()
+      throw new FetchError(`network timeout at: ${request.url}`, 'request-timeout')
+    })
 
-  nodeRequest.on('error', err => {
-    clearTimeout(nodeRequestTimeout)
-    return reject(new FetchError(`request to ${request.url} failed, reason: ${err.message}`, 'system', err))
-  })
+  const errorPromise = once('error')
+    .then(err => {
+      stopTimeout()
+      throw new FetchError(`request to ${request.url} failed, reason: ${err.message}`, 'system', err)
+    })
 
-  nodeRequest.on('response', res => {
-    clearTimeout(nodeRequestTimeout)
+  const responsePromise = once('response')
+    .then(res => {
+      stopTimeout()
 
-    const response = nodeResponseToFetchResponse(res)
+      const response = nodeResponseToFetchResponse(res)
 
-    if (isRedirect(response.status) && request.redirect !== 'manual') {
-      return handleRedirect(request, response).then(resolve).catch(reject)
-    }
+      if (isRedirect(response.status) && request.redirect !== 'manual') {
+        return handleRedirect(request, response)
+      }
 
-    if (request.redirect === 'manual' && response.headers.has('location')) {
-      const newLocation = resolveUrl(request.url, response.headers.get('location'))
-      response.headers.set('location', newLocation)
-    }
+      if (request.redirect === 'manual' && response.headers.has('location')) {
+        const newLocation = resolveUrl(request.url, response.headers.get('location'))
+        response.headers.set('location', newLocation)
+      }
 
-    const responseInit = Object.assign(
-      {},
-      pick(request, [ 'url', 'size', 'timeout' ]),
-      pick(response, [ 'headers', 'status', 'statusText' ])
-    )
+      const responseInit = Object.assign(
+        {},
+        pick(request, [ 'url', 'size', 'timeout' ]),
+        pick(response, [ 'headers', 'status', 'statusText' ])
+      )
 
-    // prepare body
-    // HTTP-network fetch step 16.1.3: handle contentEncodings
-    return (shouldNotCompress(request, response)
-      ? Promise.resolve(response.body)
-      : compressBody(response.body, response.headers.get('Content-Encoding'), res)
-    )
-      .catch(err => response.body) // just use body as is
+      // HTTP-network fetch step 16.1.3: handle contentEncodings
+      const preparedBodyPromise = shouldNotCompress(request, response)
+        ? Promise.resolve(response.body)
+        : compressBody(response.body, response.headers.get('Content-Encoding'), res)
+            .catch(err => response.body) // just use body as is
 
-      .then(body => resolve(new Response(body, responseInit)))
-  })
+      return preparedBodyPromise
+        .then(body => new Response(body, responseInit))
+    })
 
-  return writeBodyToStream(request.body, nodeRequest)
+  writeBodyToStream(request.body, nodeRequest)
+  return Promise.race([timeoutPromise, errorPromise, responsePromise])
 })
 
 export default fetch

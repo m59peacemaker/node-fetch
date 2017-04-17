@@ -5,7 +5,7 @@ import getTotalBytes from '../body/get-total-bytes'
 
 const USER_AGENT = 'node-fetch/1.0 (+https://github.com/bitinn/node-fetch)'
 
-function getNodeRequestOptions(request) {
+function makeNodeRequestOptions(request) {
   const parsedUrl = parseUrl(request.url)
   const headers = new Headers(request.headers)
 
@@ -68,4 +68,4 @@ function getNodeRequestOptions(request) {
   })
 }
 
-export default getNodeRequestOptions
+export default makeNodeRequestOptions
