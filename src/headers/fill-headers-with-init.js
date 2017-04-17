@@ -1,4 +1,5 @@
 import tryCatch from 'try_catch'
+import entries from 'object.entries-ponyfill'
 
 const EMSG_INIT_BAD_TYPE = 'No matching constructor signature.'
 const EMSG_INIT_ITEM_BAD_TYPE = 'The value provided is neither an array, nor does it have indexed properties.'
@@ -15,7 +16,7 @@ const fillHeadersWithInit = (headers, init) => {
     if (typeof init._raw === 'function') {
       init = init._raw()
     }
-    return init[Symbol.iterator] ? init : Object.entries(init)
+    return init[Symbol.iterator] ? init : entries(init)
   }, () => {
     throw new TypeError(EMSG_INIT_BAD_TYPE)
   })
