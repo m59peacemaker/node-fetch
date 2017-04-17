@@ -1,7 +1,11 @@
 import http from 'http'
 import https from 'https'
 import { resolve as resolveUrl } from 'url'
+
 import pick from 'just-pick'
+import wait from 'timeout-then'
+import toCallback from 'to-callback'
+import pify from 'pify'
 
 import Headers from '../headers'
 import Request from '../request'
@@ -16,15 +20,6 @@ import handleRedirect from './handle-redirect'
 import shouldNotCompress from './should-not-compress'
 import compressBody from './compress-body'
 import writeUnwritable from '../lib/write-unwritable'
-import wait from 'timeout-then'
-
-var promisifyOnce = function (once) {
-  return function (eventName) {
-    return new Promise(function (resolve, reject) {
-      return once(eventName, resolve)
-    })
-  }
-}
 
 const fetch = (input, init) => Promise.resolve().then(() => {
   const request = new Request(input, init)
@@ -33,7 +28,7 @@ const fetch = (input, init) => Promise.resolve().then(() => {
   let stopTimeout = () => {}
 
   const nodeRequest = makeNodeRequest(nodeRequestOptions)
-  const once = promisifyOnce(nodeRequest.once.bind(nodeRequest))
+  const once = pify(toCallback(nodeRequest.once.bind(nodeRequest)))
 
   const timeoutPromise = !request.timeout ? new Promise(() => {}) : once('socket')
     .then(() => {
