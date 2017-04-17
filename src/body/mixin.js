@@ -1,5 +1,6 @@
 import consumeBodyCore from './consume'
 import convertBody from './convert'
+import writeUnwritable from '../lib/write-unwritable'
 import Blob, { BUFFER } from '../blob.js'
 
 const defaults = {
@@ -15,7 +16,7 @@ const mixin = instance => {
     if (instance.bodyUsed) {
       return Promise.reject(new Error(`body used already for: ${url}`))
     }
-    instance.bodyUsed = true
+    writeUnwritable('bodyUsed', true, instance)
     return consumeBodyCore({ body, size, timeout, url })
   }
 

@@ -1,10 +1,11 @@
-const typeofObject = require('typeof-object')
+import isNil from 'is-nil'
+import typeofObject from 'typeof-object'
 import { BUFFER } from '../blob.js'
 
-const writeToStream = (body, stream) => {
-  if (body === null) {
+const writeBodyToStream = (body, stream) => {
+  if (isNil(body)) {
     stream.end()
-  } else if (typeof body === 'string' || Buffer.isBuffer(body)) {
+  } else if (typeofObject(body) === 'String' || Buffer.isBuffer(body)) {
     stream.write(body)
     stream.end()
   } else if (typeofObject(body) === 'Blob') {
@@ -15,4 +16,4 @@ const writeToStream = (body, stream) => {
   }
 }
 
-export default writeToStream
+export default writeBodyToStream

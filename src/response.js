@@ -1,5 +1,6 @@
 import { STATUS_CODES } from 'http'
 import Headers from './headers'
+import normalizeBody from './body/normalize'
 import cloneBody from './body/clone'
 import bodyMixin from './body/mixin'
 import setTypeofObject from './lib/set-typeof-object'
@@ -30,6 +31,7 @@ const Response = function (body = null, init) {
     Object.create(Response.prototype),
     preparedInit,
     {
+      //body: normalizeBody(body),
       body,
       headers: new Headers(preparedInit.headers),
       ok: preparedInit.status >= 200 && preparedInit.status < 300,

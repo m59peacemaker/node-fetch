@@ -1,4 +1,3 @@
-
 /**
  * fetch-error.js
  *
@@ -13,7 +12,8 @@
  * @param   String      systemError  For Node.js system error
  * @return  FetchError
  */
-export default function FetchError(message, type, systemError) {
+
+function FetchError (message, type, systemError) {
   Error.call(this, message)
 
   this.message = message
@@ -31,3 +31,5 @@ export default function FetchError(message, type, systemError) {
 FetchError.prototype = Object.create(Error.prototype)
 FetchError.prototype.constructor = FetchError
 FetchError.prototype.name = 'FetchError'
+
+export default FetchError

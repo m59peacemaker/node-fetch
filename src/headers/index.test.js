@@ -1,5 +1,5 @@
 import test from 'tape'
-import Headers from './headers'
+import Headers from './'
 
 const METHODS = [
   'append',

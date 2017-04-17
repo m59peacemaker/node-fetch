@@ -28,11 +28,11 @@ import fetch, {
 	Request,
 	Response
 } from '../src/';
-import FetchErrorOrig from '../src/fetch-error.js';
-import HeadersOrig from '../src/headers.js';
-import RequestOrig from '../src/request.js';
-import ResponseOrig from '../src/response.js';
-import Blob from '../src/blob.js';
+import FetchErrorOrig from '../src/fetch-error';
+import HeadersOrig from '../src/headers';
+import RequestOrig from '../src/request';
+import ResponseOrig from '../src/response';
+import Blob from '../src/blob';
 
 const supportToString = ({
 	[Symbol.toStringTag]: 'z'
@@ -1185,12 +1185,12 @@ describe('node-fetch', () => {
 		});
 	});
 
-	it('should return all headers using raw()', function() {
+	it('should return all headers using _raw()', function() {
 		url = `${base}cookie`;
 		return fetch(url).then(res => {
 			const expected = [ 'a=1', 'b=1' ];
 
-			expect(res.headers.raw()['set-cookie']).to.deep.equal(expected);
+			expect(res.headers._raw()['set-cookie']).to.deep.equal(expected);
 		});
 	});
 
@@ -1337,7 +1337,7 @@ describe('node-fetch', () => {
 		h1.set('n', [1, 2]);
 		h1.append('n', ['3', 4])
 
-		const h1Raw = h1.raw();
+		const h1Raw = h1._raw();
 
 		expect(h1Raw['a']).to.include('string');
 		expect(h1Raw['b']).to.include('1,2');
@@ -1362,15 +1362,15 @@ describe('node-fetch', () => {
 		const h1 = new Headers({
 			a: '1'
 		});
-		const h1Raw = h1.raw();
+		const h1Raw = h1._raw();
 
 		const h2 = new Headers(h1);
 		h2.set('b', '1');
-		const h2Raw = h2.raw();
+		const h2Raw = h2._raw();
 
 		const h3 = new Headers(h2);
 		h3.append('a', '2');
-		const h3Raw = h3.raw();
+		const h3Raw = h3._raw();
 
 		expect(h1Raw['a']).to.include('1');
 		expect(h1Raw['a']).to.not.include('2');
@@ -1491,8 +1491,8 @@ describe('node-fetch', () => {
 		expect(r2.body).to.equal(form);
 		expect(r1.follow).to.equal(1);
 		expect(r2.follow).to.equal(2);
-		expect(r1.counter).to.equal(0);
-		expect(r2.counter).to.equal(0);
+		expect(r1._followCount).to.equal(0);
+		expect(r2._followCount).to.equal(0);
 	});
 
 	it('should support overwrite Request instance', function() {
@@ -1769,7 +1769,7 @@ describe('node-fetch', () => {
 		expect(cl.follow).to.equal(3);
 		expect(cl.compress).to.equal(false);
 		expect(cl.method).to.equal('POST');
-		expect(cl.counter).to.equal(0);
+		expect(cl._followCount).to.equal(0);
 		expect(cl.agent).to.equal(agent);
 		// clone body shouldn't be the same body
 		expect(cl.body).to.not.equal(body);

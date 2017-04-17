@@ -1,5 +1,6 @@
 import Stream, { PassThrough } from 'stream'
 import typeofObject from 'typeof-object'
+import writeUnwritable from '../lib/write-unwritable'
 
 const cloneStream = stream => {
   const clone = new PassThrough()
@@ -17,7 +18,7 @@ const cloneBody = instance => {
   // TODO: find a way to clone FormData
 
   if (body instanceof Stream && typeofObject(body) !== 'FormData') {
-    instance.body = cloneStream(body)
+    writeUnwritable('body', cloneStream(body), instance)
     return cloneStream(body)
   }
 
