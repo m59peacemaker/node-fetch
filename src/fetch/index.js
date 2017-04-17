@@ -1,9 +1,7 @@
 import http from 'http'
 import https from 'https'
-import { PassThrough } from 'stream'
 import { resolve as resolveUrl } from 'url'
 import pick from 'just-pick'
-import tryCatch from 'try_catch'
 
 import Headers from '../headers'
 import Request from '../request'
@@ -12,18 +10,12 @@ import FetchError from '../fetch-error'
 
 import writeBodyToStream from '../body/write-to-stream'
 import makeNodeRequestOptions from './make-node-request-options'
+import nodeResponseToFetchResponse from './node-response-to-fetch-response'
 import isRedirect from './is-redirect'
 import handleRedirect from './handle-redirect'
 import shouldNotCompress from './should-not-compress'
 import compressBody from './compress-body'
 import writeUnwritable from '../lib/write-unwritable'
-
-const nodeResponseToFetchResponse = res => new Response(res.pipe(new PassThrough()), {
-  url: res.url,
-  status: res.statusCode,
-  statusText: res.statusMessage,
-  headers: res.headers
-})
 
 const fetch = (input, init) => new Promise((resolve, reject) => {
   const request = new Request(input, init)
