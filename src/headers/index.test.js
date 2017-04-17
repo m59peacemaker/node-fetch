@@ -120,6 +120,32 @@ test('construct headers with init array', t => {
   t.end()
 })
 
+test('construct headers with init object', t => {
+  const h = new Headers({ 'set-cookie': [ 'a=1', 'b=1' ], foo: 123 })
+  t.equal(h.get('Set-Cookie'), 'a=1,b=1', 'array value')
+  t.equal(h.get('foo'), '123', 'number value')
+
+  t.end()
+})
+
+test('when init header value is an array, it is treated as multiple values internally', t => {
+  // https://github.com/bitinn/node-fetch/issues/251
+
+  t.test('array of pairs', t => {
+    const h = new Headers([ [ 'set-cookie', [ 'a=1', 'b=1' ] ] ])
+    t.deepEqual(h._raw(), { 'set-cookie': [ 'a=1', 'b=1' ] })
+
+    t.end()
+  })
+
+  t.test('object', t => {
+    const h = new Headers({ 'set-cookie': [ 'a=1', 'b=1' ] })
+    t.deepEqual(h._raw(), { 'set-cookie': [ 'a=1', 'b=1' ] })
+
+    t.end()
+  })
+})
+
 test('construct headers with other iterables', t => {
   const headers = new Headers([
     new Set(['a', '1']),
@@ -305,3 +331,80 @@ test('leading and trailing whitespace is trimmed from values', t => {
 
   t.end()
 })
+
+test('ignores unsupported attributes while reading headers', t => {
+  const FakeHeader = function () {}
+  FakeHeader.prototype.z = 'fake'
+
+  const init = Object.assign(new FakeHeader(), {
+    a: 'string',
+    b: [ '1', '2' ],
+    c: '',
+    d: [],
+    e: 1,
+    f: [ 1, 2 ],
+    g: { a: 1 },
+    h: undefined,
+    i: null,
+    j: NaN,
+    k: true,
+    l: false,
+    m: new Buffer('test')
+  })
+
+  const h = new Headers(init)
+  h.set('n', [1, 2])
+  h.append('n', ['3', 4])
+
+  t.deepEqual(h._raw(), {
+    a: [ 'string' ],
+    b: [ '1','2' ],
+    c: [ '' ],
+    e: [ '1' ],
+    f: [ '1', '2' ],
+    g: [ '[object Object]' ],
+    h: [ 'undefined' ],
+    i: [ 'null' ],
+    j: [ 'NaN' ],
+    k: [ 'true' ],
+    l: [ 'false' ],
+    m: [ 'test' ],
+    n: [ '1,2', '3,4' ]
+  })
+
+  t.equal(h.get('a'), 'string')
+  t.equal(h.get('b'), '1,2')
+  t.equal(h.get('c'), '')
+  t.equal(h.get('d'), null)
+  t.equal(h.get('e'), '1')
+  t.equal(h.get('f'), '1,2')
+  t.equal(h.get('g'), '[object Object]')
+  t.equal(h.get('h'), 'undefined')
+  t.equal(h.get('i'), 'null')
+  t.equal(h.get('j'), 'NaN')
+  t.equal(h.get('k'), 'true')
+  t.equal(h.get('l'), 'false')
+  t.equal(h.get('m'), 'test')
+  t.equal(h.get('n'), '1,2,3,4')
+  t.equal(h.get('z'), null)
+
+  t.end()
+})
+
+test('doest not mutate init headers', t => {
+  const h1 = new Headers({ a: '1' })
+
+  const h2 = new Headers(h1)
+  h2.set('b', '1');
+
+  const h3 = new Headers(h2)
+  h3.append('a', '2')
+
+  t.deepEqual(h1._raw(), { a: [ '1' ] })
+  t.deepEqual(h2._raw(), { a: [ '1' ], b: [ '1' ] })
+  t.deepEqual(h3._raw(), { a: [ '1', '2' ], b: [ '1' ] })
+
+  t.end()
+})
+
+

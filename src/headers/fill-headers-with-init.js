@@ -9,6 +9,12 @@ const fillHeadersWithInit = (headers, init) => {
     if (typeof init !== 'object') { // may iterate like an empty object
       throw new TypeError()
     }
+
+    // When iterating an instance of headers, multiple values are represented as a comma delimited string. The `set-cookie` header may contain a single value that has a comma, and will therefore be corrupted. The workaround for now is to use `headers._raw()['set-cookie']` to get the array of values. In order to preserve the array, instead of iterating the instance of headers, we will iterate its raw object store.
+    // https://github.com/bitinn/node-fetch/issues/251
+    if (typeof init._raw === 'function') {
+      init = init._raw()
+    }
     return init[Symbol.iterator] ? init : Object.entries(init)
   }, () => {
     throw new TypeError(EMSG_INIT_BAD_TYPE)
@@ -25,7 +31,9 @@ const fillHeadersWithInit = (headers, init) => {
       throw new TypeError(EMSG_INIT_ITEM_BAD_LENGTH)
     }
 
-    headers.append(pair[0], pair[1])
+    const [ name, right ] = pair
+    const values = Array.isArray(right) ? right : [ right ]
+    values.forEach(v => headers.append(name, v))
   }
 }
 
